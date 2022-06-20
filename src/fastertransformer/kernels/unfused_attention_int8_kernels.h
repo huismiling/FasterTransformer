@@ -62,6 +62,25 @@ void invokeAddQKBiasTransform(int8_t* q_buf,
                               cudaStream_t stream);
 
 template<typename T>
+void invokeAddQKBiasTransform(int8_t* q_buf,
+                              int8_t* k_buf,
+                              const int8_t* Q,
+                              const T* bias_Q,
+                              const int8_t* K,
+                              const T* bias_K,
+                              const int batch_size,
+                              const int q_len,
+                              const int kv_len,
+                              const int head_num,
+                              const int size_per_head,
+                              const float* q_input_deQFactor_ptr,
+                              const float* k_input_deQFactor_ptr,
+                              const float* q_output_scale_ptr,
+                              const float* k_output_scale_ptr,
+                              bool use_ORDER_COL32_2R_4R4,
+                              cudaStream_t stream);
+
+template<typename T>
 void invokeAddQKBiasTransformRow(int8_t* q_buf,
                                  int8_t* k_buf,
                                  const int8_t* Q,

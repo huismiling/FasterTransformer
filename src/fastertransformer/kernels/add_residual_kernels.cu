@@ -38,6 +38,28 @@ void invokeAddBiasResidual(T* output, const T* input, const T* bias, const int m
     addBiasResidual<<<grid, block, 0, stream>>>(output, input, bias, m, n);
 }
 
+
+template<typename T>
+__global__ void addBiasResidual(T* output, const int8_t* input, const T* bias, const int m, const int n, const float out_scale_ptr)
+{
+    const int col_index = blockIdx.y * blockDim.x + threadIdx.x;
+    if (col_index < n) {
+        T bias_val = (bias == nullptr) ? (T)(0.0f) : bias[col_index];
+        T input_tmp = input[blockIdx.x * n + col_index];
+        output[blockIdx.x * n + col_index] =
+            output[blockIdx.x * n + col_index] + input_tmp*out_scale_ptr + bias_val;
+    }
+}
+
+template<typename T>
+void invokeAddBiasResidual(T* output, const int8_t* input, const T* bias, const int m, const int n, const float out_scale_ptr, cudaStream_t stream)
+{
+    int blocks_per_row = ceil(float(n) / 1024);
+    dim3 grid(m, blocks_per_row);
+    dim3 block(min(n, 1024));
+    addBiasResidual<<<grid, block, 0, stream>>>(output, input, bias, m, n);
+}
+
 template<typename T>
 __global__ void addBiasAttentionFfnResidual(T* block_output,
                                             const T* ffn_output,

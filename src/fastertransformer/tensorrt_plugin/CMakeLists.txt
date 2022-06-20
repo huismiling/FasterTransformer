@@ -15,3 +15,4 @@
 add_subdirectory(swin)
 add_subdirectory(t5)
 add_subdirectory(vit)
+add_subdirectory(wenet)

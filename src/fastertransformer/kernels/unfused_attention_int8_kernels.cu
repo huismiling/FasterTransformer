@@ -419,10 +419,12 @@ __global__ void add_QK_bias_transform_varlen(int8_t* q_buf_,
                                              const T* bias_K,
                                              const int m,
                                              const int batch_size,
-                                             const int seq_len,
+                                             const int q_len,
+                                             const int kv_len,
                                              const int head_num,
                                              const int size_per_head,
-                                             const int seq_len_padded,
+                                             const int q_len_padded,
+                                             const int kv_len_padded,
                                              const int stride_q,
                                              const int stride_k,
                                              const float* q_input_deQFactor_ptr,
@@ -441,6 +443,7 @@ __global__ void add_QK_bias_transform_varlen(int8_t* q_buf_,
     bias_ptr = qk_id == 0 ? bias_Q : bias_K;
     const float input_deQFactor = qk_id == 0 ? __ldg(q_input_deQFactor_ptr) : __ldg(k_input_deQFactor_ptr);
     const float output_scale = qk_id == 0 ? __ldg(q_output_scale_ptr) : __ldg(k_output_scale_ptr);
+    const int seq_len = qk_id == 0 ? q_len : kv_len;
 
     int threadIdx4 = threadIdx.x << 2;
     int batch_id = (blockIdx.x % m) / seq_len;
@@ -508,7 +511,7 @@ __global__ void add_QK_bias_transform_varlen(int8_t* q_buf_,
                        (col_id & 3));
     }
 
-    const int act_seq_len = (qk_id == 0) ? seq_len : seq_len_padded;
+    const int act_seq_len = (qk_id == 0) ? seq_len : kv_len_padded;
     const int stride = (qk_id == 0) ? stride_q : stride_k;
     buf_ptr4[(((batch_id * head_num + head_id) * stride + (new_col << 5) * act_seq_len + new_row) >> 2)] = tmp4;
 }
@@ -632,7 +635,8 @@ void invokeAddQKBiasTransform(int8_t* q_buf,
                               const int8_t* K,
                               const T* bias_K,
                               const int batch_size,
-                              const int seq_len,
+                              const int q_len,
+                              const int kv_len,
                               const int head_num,
                               const int size_per_head,
                               const float* q_input_deQFactor_ptr,
@@ -643,57 +647,110 @@ void invokeAddQKBiasTransform(int8_t* q_buf,
                               cudaStream_t stream)
 {
     assert(size_per_head % 32 == 0);
-    if (seq_len % 32 == 0) {
-        add_QK_bias_transform_varlen<<<dim3(batch_size * seq_len * 2),
-                                       dim3((head_num * size_per_head) / 4),
-                                       0,
-                                       stream>>>(q_buf,
-                                                 k_buf,
-                                                 Q,
-                                                 bias_Q,
-                                                 K,
-                                                 bias_K,
-                                                 batch_size * seq_len,
-                                                 batch_size,
-                                                 seq_len,
-                                                 head_num,
-                                                 size_per_head,
-                                                 seq_len,
-                                                 seq_len * size_per_head,
-                                                 seq_len * size_per_head,
-                                                 q_input_deQFactor_ptr,
-                                                 k_input_deQFactor_ptr,
-                                                 q_output_scale_ptr,
-                                                 k_output_scale_ptr,
-                                                 use_ORDER_COL32_2R_4R4);
-    }
-    else {
-        int seq_len_padded = (seq_len + 31) / 32 * 32;
-        // The padding words will not be considered in softmax, so we don't need memset for k_buf_
-        // cudaMemsetAsync(k_buf, 0, batch_size * head_num * seq_len_padded * size_per_head * sizeof(int8_t), stream);
-        add_QK_bias_transform_varlen<<<dim3(batch_size * seq_len * 2),
-                                       dim3((head_num * size_per_head) / 4),
-                                       0,
-                                       stream>>>(q_buf,
-                                                 k_buf,
-                                                 Q,
-                                                 bias_Q,
-                                                 K,
-                                                 bias_K,
-                                                 batch_size * seq_len,
-                                                 batch_size,
-                                                 seq_len,
-                                                 head_num,
-                                                 size_per_head,
-                                                 seq_len_padded,
-                                                 seq_len * size_per_head,
-                                                 seq_len_padded * size_per_head,
-                                                 q_input_deQFactor_ptr,
-                                                 k_input_deQFactor_ptr,
-                                                 q_output_scale_ptr,
-                                                 k_output_scale_ptr,
-                                                 use_ORDER_COL32_2R_4R4);
-    }
+    
+    int q_len_padded = (q_len + 31) / 32 * 32;
+    int kv_len_padded = (kv_len + 31) / 32 * 32;
+    // The padding words will not be considered in softmax, so we don't need memset for k_buf_
+    // cudaMemsetAsync(k_buf, 0, batch_size * head_num * seq_len_padded * size_per_head * sizeof(int8_t), stream);
+    add_QK_bias_transform_varlen<<<dim3(batch_size * q_len + batch_size * kv_len),
+                                    dim3((head_num * size_per_head) / 4),
+                                    0,
+                                    stream>>>(q_buf,
+                                            k_buf,
+                                            Q,
+                                            bias_Q,
+                                            K,
+                                            bias_K,
+                                            batch_size * q_len,
+                                            batch_size,
+                                            q_len,
+                                            kv_len,
+                                            head_num,
+                                            size_per_head,
+                                            q_len_padded,
+                                            kv_len_padded,
+                                            q_len * size_per_head,
+                                            kv_len_padded * size_per_head,
+                                            q_input_deQFactor_ptr,
+                                            k_input_deQFactor_ptr,
+                                            q_output_scale_ptr,
+                                            k_output_scale_ptr,
+                                            use_ORDER_COL32_2R_4R4);
+    
+}
+
+template void invokeAddQKBiasTransform(int8_t* q_buf,
+                                       int8_t* k_buf,
+                                       const int8_t* Q,
+                                       const float* bias_Q,
+                                       const int8_t* K,
+                                       const float* bias_K,
+                                       const int batch_size,
+                                       const int seq_len,
+                                       const int kv_len,
+                                       const int head_num,
+                                       const int size_per_head,
+                                       const float* q_input_deQFactor_ptr,
+                                       const float* k_input_deQFactor_ptr,
+                                       const float* q_output_scale_ptr,
+                                       const float* k_output_scale_ptr,
+                                       bool use_ORDER_COL32_2R_4R4,
+                                       cudaStream_t stream);
+
+template void invokeAddQKBiasTransform(int8_t* q_buf,
+                                       int8_t* k_buf,
+                                       const int8_t* Q,
+                                       const half* bias_Q,
+                                       const int8_t* K,
+                                       const half* bias_K,
+                                       const int batch_size,
+                                       const int seq_len,
+                                       const int kv_len,
+                                       const int head_num,
+                                       const int size_per_head,
+                                       const float* q_input_deQFactor_ptr,
+                                       const float* k_input_deQFactor_ptr,
+                                       const float* q_output_scale_ptr,
+                                       const float* k_output_scale_ptr,
+                                       bool use_ORDER_COL32_2R_4R4,
+                                       cudaStream_t stream);
+
+template<typename T>
+void invokeAddQKBiasTransform(int8_t* q_buf,
+                              int8_t* k_buf,
+                              const int8_t* Q,
+                              const T* bias_Q,
+                              const int8_t* K,
+                              const T* bias_K,
+                              const int batch_size,
+                              const int seq_len,
+                              const int head_num,
+                              const int size_per_head,
+                              const float* q_input_deQFactor_ptr,
+                              const float* k_input_deQFactor_ptr,
+                              const float* q_output_scale_ptr,
+                              const float* k_output_scale_ptr,
+                              bool use_ORDER_COL32_2R_4R4,
+                              cudaStream_t stream)
+{
+    invokeAddQKBiasTransform(q_buf,
+                            k_buf,
+                            Q,
+                            bias_Q,
+                            K,
+                            bias_K,
+                            batch_size,
+                            seq_len,
+                            seq_len,
+                            head_num,
+                            size_per_head,
+                            q_input_deQFactor_ptr,
+                            k_input_deQFactor_ptr,
+                            q_output_scale_ptr,
+                            k_output_scale_ptr,
+                            use_ORDER_COL32_2R_4R4,
+                            stream);
+
 }
 
 template void invokeAddQKBiasTransform(int8_t* q_buf,

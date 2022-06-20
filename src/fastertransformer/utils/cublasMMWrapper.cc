@@ -158,7 +158,7 @@ void cublasMMWrapper::Gemm(cublasOperation_t transa,
     half h_alpha = (half)(f_alpha);
     half h_beta = (half)(f_beta);
 
-    mu_->lock();
+    // mu_->lock();
     // TODO: default cublas libs
     int is_fp16_computeType = computeType_ == CUDA_R_16F ? 1 : 0;
     bool using_cublasLt = (Atype_ == CUDA_R_16F) ? true : false;
@@ -168,9 +168,9 @@ void cublasMMWrapper::Gemm(cublasOperation_t transa,
     const void* alpha = is_fp16_computeType ? reinterpret_cast<void*>(&h_alpha) : reinterpret_cast<void*>(&f_alpha);
     const void* beta = is_fp16_computeType ? reinterpret_cast<void*>(&h_beta) : reinterpret_cast<void*>(&f_beta);
 
-    int findAlgo = cublas_algo_map_->isExist(batch_count, m, n, k, getCublasDataType(Atype_));
+    int findAlgo = 0; // cublas_algo_map_->isExist(batch_count, m, n, k, getCublasDataType(Atype_));
 
-    cublasLtMatmulAlgo_info info = cublas_algo_map_->getAlgo(batch_count, m, n, k, getCublasDataType(Atype_));
+    cublasLtMatmulAlgo_info info;// = cublas_algo_map_->getAlgo(batch_count, m, n, k, getCublasDataType(Atype_));
     if (findAlgo) {
         if (info.stages != -1) {
             using_cublasLt = true;
@@ -272,7 +272,7 @@ void cublasMMWrapper::Gemm(cublasOperation_t transa,
         sync_check_cuda_error();
     }
     else {
-        int cublasAlgo = info.algoId;
+        int cublasAlgo = CUBLAS_GEMM_DEFAULT ; // info.algoId;
         check_cuda_error(cublasGemmEx(cublas_handle_,
                                       transa,
                                       transb,
@@ -294,7 +294,7 @@ void cublasMMWrapper::Gemm(cublasOperation_t transa,
                                       static_cast<cublasGemmAlgo_t>(cublasAlgo)));
         sync_check_cuda_error();
     }
-    mu_->unlock();
+    // mu_->unlock();
 }
 
 void cublasMMWrapper::setFP32GemmConfig()
@@ -450,12 +450,12 @@ void cublasMMWrapper::stridedBatchedGemm(cublasOperation_t transa,
     half h_alpha = (half)f_alpha;
     half h_beta = (half)f_beta;
 
-    mu_->lock();
+    // mu_->lock();
     int is_fp16_computeType = computeType_ == CUDA_R_16F ? 1 : 0;
     const void* alpha =
         is_fp16_computeType ? reinterpret_cast<void*>(&h_alpha) : reinterpret_cast<const void*>(&f_alpha);
     const void* beta = is_fp16_computeType ? reinterpret_cast<void*>(&h_beta) : reinterpret_cast<const void*>(&f_beta);
-    cublasLtMatmulAlgo_info info = cublas_algo_map_->getAlgo(batch_count, m, n, k, getCublasDataType(Atype_));
+    // cublasLtMatmulAlgo_info info = cublas_algo_map_->getAlgo(batch_count, m, n, k, getCublasDataType(Atype_));
 
     check_cuda_error(cublasGemmStridedBatchedEx(cublas_handle_,
                                                 transa,
@@ -479,9 +479,9 @@ void cublasMMWrapper::stridedBatchedGemm(cublasOperation_t transa,
                                                 strideC,
                                                 batch_count,
                                                 computeType_,
-                                                static_cast<cublasGemmAlgo_t>(info.algoId)));
+                                                static_cast<cublasGemmAlgo_t>(0)));
 
-    mu_->unlock();
+    // mu_->unlock();
 }
 
 void cublasMMWrapper::stridedBatchedGemm(cublasOperation_t transa,

@@ -789,6 +789,7 @@ void invokeSoftmaxCOL32(int8_t* output,
                         const int batch_size,
                         const int head_num,
                         const int seq_len,
+                        const int kv_len,
                         const float scalar1a,
                         const float* scalar1b,
                         const float* amax_ptr,
@@ -798,7 +799,7 @@ void invokeSoftmaxCOL32(int8_t* output,
     grid.x = seq_len;
     grid.y = batch_size;
     grid.z = head_num;
-    const int seq_len_padded = (seq_len + 31) / 32 * 32;
+    const int seq_len_padded = (kv_len + 31) / 32 * 32;
 
     if (seq_len <= 32) {
         if (batch_size * head_num > 960) {
@@ -815,7 +816,7 @@ void invokeSoftmaxCOL32(int8_t* output,
                                                               scalar1a,
                                                               scalar1b,
                                                               amax_ptr,
-                                                              seq_len * seq_len,
+                                                              seq_len * kv_len,
                                                               seq_len * seq_len_padded);
     }
     else if (seq_len <= 64 && (seq_len % 2 == 0)) {
@@ -833,7 +834,7 @@ void invokeSoftmaxCOL32(int8_t* output,
                                                               scalar1a,
                                                               scalar1b,
                                                               amax_ptr,
-                                                              seq_len * seq_len,
+                                                              seq_len * kv_len,
                                                               seq_len * seq_len_padded);
     }
     else if (seq_len > 64 && (seq_len % 4 == 0)) {
@@ -848,7 +849,7 @@ void invokeSoftmaxCOL32(int8_t* output,
                                                          scalar1a,
                                                          scalar1b,
                                                          amax_ptr,
-                                                         seq_len * seq_len,
+                                                         seq_len * kv_len,
                                                          seq_len * seq_len_padded);
     }
     else {
@@ -863,11 +864,60 @@ void invokeSoftmaxCOL32(int8_t* output,
                                                                     scalar1a,
                                                                     scalar1b,
                                                                     amax_ptr,
-                                                                    seq_len * seq_len,
+                                                                    seq_len * kv_len,
                                                                     seq_len * seq_len_padded);
     }
 }
 
+template void invokeSoftmaxCOL32(int8_t* output,
+                                 const int8_t* input,
+                                 const float* attr_mask,
+                                 const int batch_size,
+                                 const int head_num,
+                                 const int seq_len,
+                                 const int kv_len,
+                                 const float scalar1a,
+                                 const float* scalar1b,
+                                 const float* amax_ptr,
+                                 cudaStream_t stream);
+
+template void invokeSoftmaxCOL32(int8_t* output,
+                                 const int8_t* input,
+                                 const half* attr_mask,
+                                 const int batch_size,
+                                 const int head_num,
+                                 const int seq_len,
+                                 const int kv_len,
+                                 const float scalar1a,
+                                 const float* scalar1b,
+                                 const float* amax_ptr,
+                                 cudaStream_t stream);
+
+template<typename T>
+void invokeSoftmaxCOL32(int8_t* output,
+                        const int8_t* input,
+                        const T* attr_mask,
+                        const int batch_size,
+                        const int head_num,
+                        const int seq_len,
+                        const float scalar1a,
+                        const float* scalar1b,
+                        const float* amax_ptr,
+                        cudaStream_t stream)
+{
+    invokeSoftmaxCOL32(output,
+                        input,
+                        attr_mask,
+                        batch_size,
+                        head_num,
+                        seq_len,
+                        seq_len,
+                        scalar1a,
+                        scalar1b,
+                        amax_ptr,
+                        stream);
+
+}
 template void invokeSoftmaxCOL32(int8_t* output,
                                  const int8_t* input,
                                  const float* attr_mask,
@@ -889,7 +939,6 @@ template void invokeSoftmaxCOL32(int8_t* output,
                                  const float* scalar1b,
                                  const float* amax_ptr,
                                  cudaStream_t stream);
-
 /*******************  invokeSoftmaxCOL32  ***********************/
 
 // grid = (window_len/word_per_thread, window_num*num_head, batch_size)

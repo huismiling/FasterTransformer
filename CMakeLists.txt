@@ -23,7 +23,7 @@ endif()
 
 option(BUILD_TF "Build in TensorFlow mode" OFF)
 option(BUILD_PYT "Build in PyTorch TorchScript class mode" OFF)
-option(BUILD_TRT "Build projects about TensorRT" OFF)
+option(BUILD_TRT "Build projects about TensorRT" ON)
 if(NOT BUILD_MULTI_GPU)
   option(BUILD_MULTI_GPU "Build project about multi-GPU" OFF)
 endif()
@@ -73,6 +73,9 @@ if(BUILD_TF AND NOT TF_PATH)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CUDA_PATH}/lib64)
+if(BUILD_TRT)
+  list(APPEND CMAKE_MODULE_PATH ${TRT_PATH}/lib)
+endif()
 
 # profiling
 option(USE_NVTX "Whether or not to use nvtx" OFF)
@@ -166,11 +169,18 @@ set(COMMON_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}
   ${CUDA_PATH}/include
 )
+
+if(BUILD_TRT)
+  list(APPEND COMMON_HEADER_DIRS ${TRT_PATH}/include)
+endif()
 message("-- COMMON_HEADER_DIRS: ${COMMON_HEADER_DIRS}")
 
 set(COMMON_LIB_DIRS
   ${CUDA_PATH}/lib64
 )
+if(BUILD_TRT)
+  list(APPEND COMMON_LIB_DIRS ${TRT_PATH}/lib)
+endif()
 
 if (SPARSITY_SUPPORT)
   list(APPEND COMMON_HEADER_DIRS ${CUSPARSELT_PATH}/include)

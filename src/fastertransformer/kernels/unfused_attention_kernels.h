@@ -39,9 +39,21 @@ void invokeMaskedSoftMax(T* buffer,
                          const T* attr_mask,
                          const int batch_size,
                          const int seq_len,
+                         const int kv_len,
                          const int head_num,
                          const T scalar,
                          cudaStream_t stream);
+
+template<typename T, typename T_IN>
+void invokeMaskedSoftMax(T* buffer,
+                         const T_IN* buffer_src,
+                         const T* attr_mask,
+                         const int batch_size,
+                         const int seq_len,
+                         const int head_num,
+                         const T scalar,
+                         cudaStream_t stream);
+
 
 template<typename T>
 void invokeTransposeQKV(T* dst,
